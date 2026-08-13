@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Cell Defense: Microscopic War (Landscape Edition)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      background-color: #020005;
+      color: #fff;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #game-wrapper {
+      position: relative;
+      width: 100vw;
+      height: 56.25vw; /* Rasio 16:9 Landscape */
+      max-height: 100vh;
+      max-width: 177.78vh;
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.25);
+      background: #000;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* UI Atas */
+    .ui-top {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .stat-badge {
+      background: rgba(10, 2, 18, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Panel Kontrol Audio (Interaktif) */
+    .audio-panel {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(10, 2, 18, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(0, 240, 255, 0.3);
+    }
+    .audio-btn {
+      background: none;
+      border: none;
+      color: #00ffff;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .volume-slider {
+      width: 70px;
+      accent-color: #00ffff;
+      cursor: pointer;
+    }
+
+    /* On-Screen Touch Controls */
+    .touch-controls {
+      position: absolute;
+      bottom: 15px;
+      left: 0;
+      width: 100%;
+      height: 140px;
+      pointer-events: none;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 20;
+    }
+
+    .dpad {
+      pointer-events: auto;
+      position: relative;
+      width: 130px;
+      height: 130px;
+    }
+    .dpad-btn {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.12);
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: white;
+      backdrop-filter: blur(4px);
+    }
+    .dpad-btn:active {
+      background: rgba(0, 240, 255, 0.4);
+      border-color: #00ffff;
+    }
+    #btn-up { top: 0; left: 42px; width: 46px; height: 42px; }
+    #btn-down { bottom: 0; left: 42px; width: 46px; height: 42px; }
+    #btn-left { top: 42px; left: 0; width: 42px; height: 46px; }
+    #btn-right { top: 42px; right: 0; width: 42px; height: 46px; }
+
+    .shoot-area {
+      pointer-events: auto;
+      display: flex;
+      align-items: flex-end;
+    }
+    .btn-shoot {
+      width: 85px;
+      height: 85px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ff0055 0%, #aa0033 100%);
+      border: 3px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 0 20px rgba(255, 0, 85, 0.6);
+      color: white;
+      font-weight: bold;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 1px;
+    }
+    .btn-shoot:active {
+      transform: scale(0.92);
+      background: #ff3300;
+    }
+
+    /* Screen Overlay */
+    #overlay-screen {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(5, 1, 10, 0.92);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      text-align: center;
+    }
+    #overlay-screen h1 {
+      font-size: 32px; color: #00ffff; margin-bottom: 8px;
+      text-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
+    }
+    #overlay-screen p { font-size: 15px; margin-bottom: 24px; color: #ccc; }
+    .btn-start {
+      background: linear-gradient(135deg, #00c3e6, #ff0055);
+      color: white; border: none; padding: 14px 36px;
+      font-size: 16px; font-weight: bold; border-radius: 30px;
+      cursor: pointer; box-shadow: 0 5px 25px rgba(0, 240, 255, 0.5);
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+    <!-- Top UI -->
+    <div class="ui-top">
+      <div class="stat-badge" style="color: #55ff99;">🛡️ Sel Leukosit: <span id="hpVal">100</span>%</div>
+      
+      <!-- Panel Audio Kontrol -->
+      <div class="audio-panel">
+        <button class="audio-btn" id="muteBtn" onclick="toggleMute()">🔊</button>
+        <input type="range" class="volume-slider" id="volSlider" min="0" max="1" step="0.05" value="0.3" oninput="changeVolume(this.value)">
+      </div>
+
+      <div class="stat-badge" style="color: #ffdd44;">🦠 Patogen Hancur: <span id="scoreVal">0</span></div>
+    </div>
+
+    <!-- On-Screen Controls -->
+    <div class="touch-controls">
+      <div class="dpad">
+        <div class="dpad-btn" id="btn-up">▲</div>
+        <div class="dpad-btn" id="btn-down">▼</div>
+        <div class="dpad-btn" id="btn-left">◀</div>
+        <div class="dpad-btn" id="btn-right">▶</div>
+      </div>
+      <div class="shoot-area">
+        <div class="btn-shoot" id="btn-shoot">ANTIBODI</div>
+      </div>
+    </div>
+
+    <!-- Start / Game Over Overlay -->
+    <div id="overlay-screen">
+      <h1 id="overlayTitle">CELL DEFENSE</h1>
+      <p id="overlayDesc">Basmi invasi virus & patogen mikroskopis!</p>
+      <button class="btn-start" id="startBtn" onclick="startGame()">Mulai Pertempuran</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const hpVal = document.getElementById('hpVal');
+    const scoreVal = document.getElementById('scoreVal');
+    const overlayScreen = document.getElementById('overlay-screen');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const overlayDesc = document.getElementById('overlayDesc');
+    const startBtn = document.getElementById('startBtn');
+    const muteBtn = document.getElementById('muteBtn');
+
+    let gameActive = false;
+    let score = 0;
+    let hp = 100;
+    let time = 0;
+
+    // --- SINTESIS AUDIO & MUSIK LATAR BELAKANG (WEB AUDIO API) ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+    let masterGain, bgmGain;
+    let bgmOsc1, bgmOsc2, bgmFilter, bgmLfo;
+    let isMuted = false;
+    let masterVolume = 0.3;
+
+    function initAudio() {
+      if (audioCtx) return;
+      audioCtx = new AudioContext();
+
+      // Master Gain
+      masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
+      masterGain.connect(audioCtx.destination);
+
+      // BGM Synth Network (Sci-Fi Ambient Drone & Pulse)
+      bgmGain = audioCtx.createGain();
+      bgmGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+
+      bgmFilter = audioCtx.createBiquadFilter();
+      bgmFilter.type = 'lowpass';
+      bgmFilter.frequency.setValueAtTime(350, audioCtx.currentTime);
+
+      // Bass drone oscillator
+      bgmOsc1 = audioCtx.createOscillator();
+      bgmOsc1.type = 'sawtooth';
+      bgmOsc1.frequency.setValueAtTime(55, audioCtx.currentTime); // Chord A1
+
+      // Sub drone oscillator
+      bgmOsc2 = audioCtx.createOscillator();
+      bgmOsc2.type = 'sine';
+      bgmOsc2.frequency.setValueAtTime(110, audioCtx.currentTime); // Chord A2
+
+      // LFO Modulator untuk efek detak jantung/pulsasi biologis
+      bgmLfo = audioCtx.createOscillator();
+      bgmLfo.frequency.setValueAtTime(1.2, audioCtx.currentTime); // Rate pulsasi
+      const lfoGain = audioCtx.createGain();
+      lfoGain.gain.setValueAtTime(150, audioCtx.currentTime);
+
+      bgmLfo.connect(lfoGain);
+      lfoGain.connect(bgmFilter.frequency);
+
+      bgmOsc1.connect(bgmFilter);
+      bgmOsc2.connect(bgmFilter);
+      bgmFilter.connect(bgmGain);
+      bgmGain.connect(masterGain);
+
+      bgmOsc1.start();
+      bgmOsc2.start();
+      bgmLfo.start();
+    }
+
+    function toggleMute() {
+      if (!audioCtx) initAudio();
+      isMuted = !isMuted;
+      if (isMuted) {
+        masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        muteBtn.innerText = '🔇';
+      } else {
+        masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
+        muteBtn.innerText = '🔊';
+      }
+    }
+
+    function changeVolume(val) {
+      if (!audioCtx) initAudio();
+      masterVolume = parseFloat(val);
+      if (!isMuted) {
+        masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
+      }
+    }
+
+    function playSound(type) {
+      if (!audioCtx || isMuted) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(masterGain);
+
+      if (type === 'shoot') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+      } else if (type === 'hit') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+      } else if (type === 'damage') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(30, audioCtx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+      }
+    }
+
+    // --- KONTROL NAVIGASI ---
+    const keys = { up: false, down: false, left: false, right: false };
+
+    window.addEventListener('keydown', e => {
+      if (e.key === 'ArrowUp' || e.key === 'w') keys.up = true;
+      if (e.key === 'ArrowDown' || e.key === 's') keys.down = true;
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+      if (e.key === ' ' || e.key === 'Enter') shootAntibody();
+    });
+    window.addEventListener('keyup', e => {
+      if (e.key === 'ArrowUp' || e.key === 'w') keys.up = false;
+      if (e.key === 'ArrowDown' || e.key === 's') keys.down = false;
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+    });
+
+    function setupTouchBtn(id, keyName) {
+      const btn = document.getElementById(id);
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+      btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+      btn.addEventListener('mousedown', () => { keys[keyName] = true; });
+      btn.addEventListener('mouseup', () => { keys[keyName] = false; });
+    }
+    setupTouchBtn('btn-up', 'up');
+    setupTouchBtn('btn-down', 'down');
+    setupTouchBtn('btn-left', 'left');
+    setupTouchBtn('btn-right', 'right');
+
+    const shootBtn = document.getElementById('btn-shoot');
+    shootBtn.addEventListener('touchstart', (e) => { e.preventDefault(); shootAntibody(); });
+    shootBtn.addEventListener('mousedown', () => { shootAntibody(); });
+
+    // --- ANIMASI SEL DARAH MERAH DI LATAR BELAKANG ---
+    class BackgroundRBC {
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.radius = Math.random() * 18 + 12;
+        this.speed = Math.random() * 0.8 + 0.3;
+        this.alpha = Math.random() * 0.25 + 0.1;
+        this.angle = Math.random() * Math.PI * 2;
+      }
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.globalAlpha = this.alpha;
+        
+        // Bentuk Bikonkaf Sel Darah Merah
+        let grad = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius);
+        grad.addColorStop(0, '#550011');
+        grad.addColorStop(0.7, '#cc0022');
+        grad.addColorStop(1, '#ff1a40');
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.radius, this.radius * 0.7, 0, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+      }
+      update() {
+        this.x -= this.speed;
+        this.angle += 0.005;
+        if (this.x < -40) {
+          this.x = canvas.width + 40;
+          this.y = Math.random() * canvas.height;
+        }
+      }
+    }
+
+    // --- ANIMASI SEL DARAH PUTIH (PLAYER LEUKOSIT) ---
+    class ImmuneCell {
+      constructor() {
+        this.x = canvas.width / 4;
+        this.y = canvas.height / 2;
+        this.radius = 30;
+        this.speed = 5.5;
+        this.pseudopods = [];
+        for (let i = 0; i < 12; i++) {
+          this.pseudopods.push({
+            angle: (Math.PI * 2 / 12) * i,
+            length: Math.random() * 6 + 2,
+            speed: Math.random() * 0.08 + 0.04
+          });
+        }
+      }
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Membran Organik Amuboid (Pseudopodia bergerak lentur)
+        ctx.beginPath();
+        for (let i = 0; i < this.pseudopods.length; i++) {
+          let p = this.pseudopods[i];
+          let r = this.radius + Math.sin(time * 3 + p.angle * 2) * p.length;
+          let px = Math.cos(p.angle) * r;
+          let py = Math.sin(p.angle) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+
+        // Bioluminescent Gradient
+        let bodyGrad = ctx.createRadialGradient(-6, -6, 2, 0, 0, this.radius + 5);
+        bodyGrad.addColorStop(0, '#ffffff');
+        bodyGrad.addColorStop(0.5, '#b8f3ff');
+        bodyGrad.addColorStop(0.85, '#00d0ff');
+        bodyGrad.addColorStop(1, '#0077aa');
+        
+        ctx.fillStyle = bodyGrad;
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 20;
+        ctx.fill();
+
+        // Inti Sel Multilobula (Khas Leukosit/Neutrofil)
+        ctx.fillStyle = 'rgba(120, 0, 180, 0.75)';
+        ctx.shadowBlur = 0;
+        for (let a of [0, 2.1, 4.2]) {
+          let nx = Math.cos(a + time) * 7;
+          let ny = Math.sin(a + time) * 7;
+          ctx.beginPath();
+          ctx.arc(nx, ny, 7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+      update() {
+        if (keys.up && this.y - this.radius > 10) this.y -= this.speed;
+        if (keys.down && this.y + this.radius < canvas.height - 10) this.y += this.speed;
+        if (keys.left && this.x - this.radius > 10) this.x -= this.speed;
+        if (keys.right && this.x + this.radius < canvas.width - 10) this.x += this.speed;
+      }
+    }
+
+    // --- TEMBAKAN ANTIBODI ---
+    class Antibody {
+      constructor(x, y) {
+        this.x = x; this.y = y; this.speed = 13;
+        this.rotation = 0;
+      }
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 12;
+
+        // Bentuk Protein "Y" Antibodi Spesifik
+        ctx.beginPath();
+        ctx.moveTo(-10, 0); ctx.lineTo(2, 0);
+        ctx.moveTo(2, 0); ctx.lineTo(10, -8);
+        ctx.moveTo(2, 0); ctx.lineTo(10, 8);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+      update() { this.x += this.speed; }
+    }
+
+    // --- DESAIN ANIMASI VIRUS & PATOGEN UNIK ---
+    class Pathogen {
+      constructor() {
+        this.x = canvas.width + 50;
+        this.y = Math.random() * (canvas.height - 100) + 50;
+        
+        const types = ['corona', 'bacteriophage', 'ebola', 'mutant'];
+        this.type = types[Math.floor(Math.random() * types.length)];
+        this.pulse = Math.random() * 10;
+
+        if (this.type === 'corona') {
+          this.radius = 18; this.speed = 2.4; this.hp = 1;
+        } else if (this.type === 'bacteriophage') {
+          this.radius = 20; this.speed = 2.0; this.hp = 2;
+        } else if (this.type === 'ebola') {
+          this.radius = 16; this.speed = 3.2; this.hp = 1;
+        } else { // Mutant Virus
+          this.radius = 34; this.speed = 1.1; this.hp = 5;
+        }
+      }
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        this.pulse += 0.05;
+
+        if (this.type === 'corona') {
+          // Virus Corona Berduri Spiky (Crown Spikes)
+          ctx.fillStyle = '#ff0055';
+          ctx.shadowColor = '#ff0055';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Protein Spike berdenyut
+          ctx.fillStyle = '#ffcc00';
+          for (let i = 0; i < 10; i++) {
+            let a = (Math.PI * 2 / 10) * i;
+            let spikeLen = this.radius + 6 + Math.sin(this.pulse + i) * 2;
+            let sx = Math.cos(a) * spikeLen;
+            let sy = Math.sin(a) * spikeLen;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ff0055';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
+            ctx.lineTo(sx, sy);
+            ctx.stroke();
+          }
+        } else if (this.type === 'bacteriophage') {
+          // Bakteriofag Robotik Khas (Kepala Icosahedral + Kaki Fleksibel)
+          ctx.strokeStyle = '#00ff66';
+          ctx.fillStyle = '#003311';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#00ff66';
+          ctx.shadowBlur = 10;
+
+          // Kepala Heksagon
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            let a = (Math.PI / 3) * i;
+            let hx = Math.cos(a) * 12;
+            let hy = Math.sin(a) * 12 - 8;
+            if (i === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+          }
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+
+          // Batang & Kaki Laba-Laba
+          ctx.beginPath();
+          ctx.moveTo(0, 4); ctx.lineTo(0, 14);
+          let legAnim = Math.sin(this.pulse * 2) * 3;
+          ctx.moveTo(0, 14); ctx.lineTo(-10, 24 + legAnim);
+          ctx.moveTo(0, 14); ctx.lineTo(10, 24 - legAnim);
+          ctx.stroke();
+
+        } else if (this.type === 'ebola') {
+          // Virus Ebola Cacing/Filamen (Filovirus)
+          ctx.strokeStyle = '#ff6600';
+          ctx.lineWidth = 6;
+          ctx.lineCap = 'round';
+          ctx.shadowColor = '#ff6600';
+          ctx.shadowBlur = 12;
+
+          ctx.beginPath();
+          for (let i = -15; i <= 15; i += 3) {
+            let wave = Math.sin(this.pulse * 3 + i * 0.2) * 8;
+            if (i === -15) ctx.moveTo(i, wave);
+            else ctx.lineTo(i, wave);
+          }
+          ctx.stroke();
+
+        } else {
+          // Mutan Raksasa Gelap Bermata Banyak
+          ctx.fillStyle = '#9900ff';
+          ctx.shadowColor = '#a600ff';
+          ctx.shadowBlur = 18;
+
+          ctx.beginPath();
+          for (let i = 0; i < 8; i++) {
+            let a = (Math.PI / 4) * i;
+            let r = this.radius + Math.sin(this.pulse * 2 + i) * 4;
+            let mx = Math.cos(a) * r;
+            let my = Math.sin(a) * r;
+            if (i === 0) ctx.moveTo(mx, my); else ctx.lineTo(mx, my);
+          }
+          ctx.closePath(); ctx.fill();
+
+          // Mata Berlapis
+          ctx.fillStyle = '#ffff00';
+          ctx.beginPath();
+          ctx.arc(-10, -8, 5, 0, Math.PI*2);
+          ctx.arc(10, -8, 5, 0, Math.PI*2);
+          ctx.arc(0, 6, 6, 0, Math.PI*2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+      update() { this.x -= this.speed; }
+    }
+
+    // --- EFEK PARTIKEL LISIS (LEDAKAN ORGANIK) ---
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x; this.y = y; this.color = color;
+        this.radius = Math.random() * 4 + 1.5;
+        this.vx = (Math.random() - 0.5) * 7;
+        this.vy = (Math.random() - 0.5) * 7;
+        this.alpha = 1;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      update() {
+        this.x += this.vx; this.y += this.vy;
+        this.alpha -= 0.035;
+      }
+    }
+
+    // --- INISIALISASI GAME ---
+    let player = new ImmuneCell();
+    let rbcArray = [];
+    let antibodies = [];
+    let pathogens = [];
+    let particles = [];
+
+    for (let i = 0; i < 15; i++) {
+      rbcArray.push(new BackgroundRBC());
+    }
+
+    function shootAntibody() {
+      if (!gameActive) return;
+      antibodies.push(new Antibody(player.x + 25, player.y));
+      playSound('shoot');
+    }
+
+    let spawnTimer = setInterval(() => {
+      if (gameActive) pathogens.push(new Pathogen());
+    }, 1100);
+
+    // --- MAIN GAME LOOP ---
+    function animate() {
+      time += 0.03;
+
+      // Clear & Draw Microscopic Fluid Environment
+      let bgGrad = ctx.createRadialGradient(
+        canvas.width/2, canvas.height/2, 50,
+        canvas.width/2, canvas.height/2, canvas.width/1.2
+      );
+      bgGrad.addColorStop(0, '#1a000c');
+      bgGrad.addColorStop(1, '#030005');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Render Sel Darah Merah Latar Belakang
+      rbcArray.forEach(rbc => { rbc.update(); rbc.draw(); });
+
+      if (gameActive) {
+        player.update();
+        player.draw();
+
+        // Render Antibodi
+        antibodies.forEach((ab, i) => {
+          ab.update(); ab.draw();
+          if (ab.x > canvas.width + 20) antibodies.splice(i, 1);
+        });
+
+        // Render & Logika Patogen
+        pathogens.forEach((p, pIndex) => {
+          p.update(); p.draw();
+
+          // Benturan Tembakan Antibodi vs Virus
+          antibodies.forEach((ab, abIndex) => {
+            let dist = Math.hypot(ab.x - p.x, ab.y - p.y);
+            if (dist < p.radius + 8) {
+              p.hp--;
+              antibodies.splice(abIndex, 1);
+              playSound('hit');
+
+              for(let i=0; i<6; i++) particles.push(new Particle(ab.x, ab.y, '#00ffff'));
+
+              if (p.hp <= 0) {
+                score += 10;
+                scoreVal.innerText = score;
+                let particleColor = p.type === 'corona' ? '#ff0055' : (p.type === 'bacteriophage' ? '#00ff66' : '#a600ff');
+                for(let i=0; i<16; i++) particles.push(new Particle(p.x, p.y, particleColor));
+                pathogens.splice(pIndex, 1);
+              }
+            }
+          });
+
+          // Benturan Virus vs Sel Darah Putih (Player Damage)
+          let distPlayer = Math.hypot(player.x - p.x, player.y - p.y);
+          if (distPlayer < player.radius + p.radius) {
+            hp -= 15;
+            hpVal.innerText = Math.max(0, hp);
+            playSound('damage');
+            for(let i=0; i<12; i++) particles.push(new Particle(p.x, p.y, '#ff0000'));
+            pathogens.splice(pIndex, 1);
+
+            if (hp <= 0) endGame();
+          }
+
+          if (p.x < -50) pathogens.splice(pIndex, 1);
+        });
+
+        // Partikel Efek Ledakan Lisis
+        particles.forEach((part, index) => {
+          part.update(); part.draw();
+          if (part.alpha <= 0) particles.splice(index, 1);
+        });
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    function startGame() {
+      initAudio();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      hp = 100; score = 0;
+      hpVal.innerText = hp; scoreVal.innerText = score;
+      pathogens = []; antibodies = []; particles = [];
+      player = new ImmuneCell();
+      gameActive = true;
+      overlayScreen.classList.add('hidden');
+    }
+
+    function endGame() {
+      gameActive = false;
+      overlayTitle.innerText = "INFEKSI MELUAS!";
+      overlayDesc.innerText = `Total Patogen Dihancurkan: ${score}`;
+      startBtn.innerText = "Injeksi Vaksin & Main Lagi";
+      overlayScreen.classList.remove('hidden');
+    }
+
+    // Jalankan Loop Animasi
+    animate();
+  </script>
+</body>
+</html>
