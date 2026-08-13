@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cell Defense - Game Biologi IPA</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background-color: #0d0208;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      box-shadow: 0 0 30px rgba(255, 0, 85, 0.3);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid #330a18;
+    }
+    canvas {
+      display: block;
+      background: #1a050e;
+      cursor: crosshair;
+    }
+    .ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 18px;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(0,0,0,0.8);
+    }
+    .stat-box {
+      background: rgba(20, 5, 12, 0.75);
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    #game-over-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 2, 8, 0.88);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+    }
+    #game-over-screen h1 {
+      font-size: 36px;
+      color: #ff3366;
+      margin-bottom: 10px;
+      text-shadow: 0 0 12px rgba(255, 51, 102, 0.5);
+    }
+    #game-over-screen p {
+      font-size: 18px;
+      margin-bottom: 25px;
+      color: #ccc;
+    }
+    button {
+      background: linear-gradient(45deg, #ff0055, #ff5500);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(255, 0, 85, 0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(255, 0, 85, 0.6);
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div class="ui-layer">
+      <div class="stats">
+        <div class="stat-box" style="color: #4dff88;">🛡️ Darah Sel: <span id="hpVal">100</span>%</div>
+        <div class="stat-box" style="color: #ffcc00;">🦠 Patogen Dibasmi: <span id="scoreVal">0</span></div>
+      </div>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+      <h1>Infeksi Meluas!</h1>
+      <p>Total Patogen Terbasmi: <span id="finalScore">0</span></p>
+      <button onclick="restartGame()">Obati & Main Lagi</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI Elements
+    const hpVal = document.getElementById('hpVal');
+    const scoreVal = document.getElementById('scoreVal');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScore = document.getElementById('finalScore');
+
+    // Game Variables
+    let gameActive = true;
+    let score = 0;
+    let hp = 100;
+    let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+
+    // --- 1. SEL DARAH PUTIH (PLAYER) ---
+    class ImmuneCell {
+      constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.radius = 28;
+        this.angle = 0;
+        this.nucleusAngle = 0;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Arahkan sel ke kursor
+        this.angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+
+        // Efek Membran luar (Ameboid/Glow)
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(100, 220, 255, 0.2)';
+        ctx.fill();
+
+        // Badan Sel
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#e6ffff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 15;
+        ctx.fill();
+
+        // Inti Sel (Nucleus khas Leukosit)
+        this.nucleusAngle += 0.02;
+        ctx.beginPath();
+        ctx.arc(Math.cos(this.nucleusAngle)*3, Math.sin(this.nucleusAngle)*3, 12, 0, Math.PI * 2);
+        ctx.fillStyle = '#8000ff';
+        ctx.fill();
+
+        // Pseudopodia / Penembak Antibodi
+        ctx.rotate(this.angle);
+        ctx.beginPath();
+        ctx.rect(10, -5, 20, 10);
+        ctx.fillStyle = '#00ccff';
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      update() {
+        // Gerakan mulus mengikuti mouse
+        this.x += (mouse.x - this.x) * 0.08;
+        this.y += (mouse.y - this.y) * 0.08;
+      }
+    }
+
+    // --- 2. ANTIBODI (PELURU) ---
+    class Antibody {
+      constructor(x, y, angle) {
+        this.x = x;
+        this.y = y;
+        this.speed = 9;
+        this.vx = Math.cos(angle) * this.speed;
+        this.vy = Math.sin(angle) * this.speed;
+        this.radius = 5;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#00ffff';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+      }
+    }
+
+    // --- 3. PATOGEN (BAKTERI & VIRUS) ---
+    class Pathogen {
+      constructor() {
+        // Muncul dari luar layar
+        if (Math.random() < 0.5) {
+          this.x = Math.random() < 0.5 ? -30 : canvas.width + 30;
+          this.y = Math.random() * canvas.height;
+        } else {
+          this.x = Math.random() * canvas.width;
+          this.y = Math.random() < 0.5 ? -30 : canvas.height + 30;
+        }
+
+        this.type = Math.random() < 0.6 ? 'bakteri' : 'virus';
+        this.radius = this.type === 'bakteri' ? 20 : 14;
+        this.speed = this.type === 'bakteri' ? 1.5 : 2.6;
+        this.hp = this.type === 'bakteri' ? 2 : 1;
+        this.angle = 0;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        this.angle += 0.03;
+        ctx.rotate(this.angle);
+
+        if (this.type === 'bakteri') {
+          // Animasi Bakteri Batang/Kapsul
+          ctx.beginPath();
+          ctx.ellipse(0, 0, this.radius, this.radius * 0.6, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#ff3300';
+          ctx.shadowColor = '#ff3300';
+          ctx.shadowBlur = 10;
+          ctx.fill();
+
+          // Silia / Bulu-bulu Bakteri
+          ctx.strokeStyle = '#ff6633';
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 8; i++) {
+            let a = (Math.PI / 4) * i;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * (this.radius * 0.6));
+            ctx.lineTo(Math.cos(a) * (this.radius + 8), Math.sin(a) * (this.radius * 0.6 + 8));
+            ctx.stroke();
+          }
+        } else {
+          // Animasi Virus Mahkota/Spike (Corona-like)
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+          ctx.fillStyle = '#ff00aa';
+          ctx.shadowColor = '#ff00aa';
+          ctx.shadowBlur = 12;
+          ctx.fill();
+
+          // Jarum Mahkota Virus
+          ctx.fillStyle = '#ffff00';
+          for (let i = 0; i < 6; i++) {
+            let a = (Math.PI / 3) * i;
+            ctx.beginPath();
+            ctx.arc(Math.cos(a) * (this.radius + 4), Math.sin(a) * (this.radius + 4), 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        ctx.restore();
+      }
+
+      update(targetX, targetY) {
+        let angle = Math.atan2(targetY - this.y, targetX - this.x);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+      }
+    }
+
+    // --- 4. EFEK PARTIKEL LEDAKAN ---
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.radius = Math.random() * 3 + 1;
+        this.vx = (Math.random() - 0.5) * 6;
+        this.vy = (Math.random() - 0.5) * 6;
+        this.alpha = 1;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= 0.03;
+      }
+    }
+
+    // Initialize Entities
+    const player = new ImmuneCell();
+    let antibodies = [];
+    let pathogens = [];
+    let particles = [];
+
+    // Listener Input
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('click', () => {
+      if (!gameActive) return;
+      antibodies.push(new Antibody(player.x, player.y, player.angle));
+    });
+
+    // Spawn Patogen secara berkala
+    setInterval(() => {
+      if (gameActive) {
+        pathogens.push(new Pathogen());
+      }
+    }, 1200);
+
+    // --- MAIN GAME LOOP ---
+    function animate() {
+      if (!gameActive) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Gambar Efek Latar Belakang Jaringan Cairan
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+      ctx.beginPath();
+      ctx.arc(100, 100, 80, 0, Math.PI * 2);
+      ctx.arc(700, 500, 120, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Update Player
+      player.update();
+      player.draw();
+
+      // Update & Render Peluru Antibodi
+      antibodies.forEach((ab, abIndex) => {
+        ab.update();
+        ab.draw();
+
+        // Hapus jika keluar layar
+        if (ab.x < 0 || ab.x > canvas.width || ab.y < 0 || ab.y > canvas.height) {
+          antibodies.splice(abIndex, 1);
+        }
+      });
+
+      // Update & Render Patogen
+      pathogens.forEach((p, pIndex) => {
+        p.update(player.x, player.y);
+        p.draw();
+
+        // Cek Tabrakan: Patogen Kena Player
+        let distToPlayer = Math.hypot(player.x - p.x, player.y - p.y);
+        if (distToPlayer < player.radius + p.radius) {
+          hp -= p.type === 'bakteri' ? 15 : 10;
+          hpVal.innerText = Math.max(0, hp);
+          
+          // Efek Kena Serang
+          for (let i = 0; i < 10; i++) {
+            particles.push(new Particle(p.x, p.y, '#ff0000'));
+          }
+
+          pathogens.splice(pIndex, 1);
+
+          if (hp <= 0) {
+            endGame();
+          }
+        }
+
+        // Cek Tabrakan: Antibodi Kena Patogen
+        antibodies.forEach((ab, abIndex) => {
+          let distToAb = Math.hypot(ab.x - p.x, ab.y - p.y);
+          if (distToAb < ab.radius + p.radius) {
+            p.hp--;
+
+            // Buat Partikel Percikan
+            for (let i = 0; i < 6; i++) {
+              particles.push(new Particle(ab.x, ab.y, p.type === 'bakteri' ? '#ff6633' : '#ff00aa'));
+            }
+
+            antibodies.splice(abIndex, 1);
+
+            if (p.hp <= 0) {
+              score += p.type === 'bakteri' ? 15 : 10;
+              scoreVal.innerText = score;
+              pathogens.splice(pIndex, 1);
+            }
+          }
+        });
+      });
+
+      // Update Partikel Ledakan
+      particles.forEach((part, index) => {
+        part.update();
+        part.draw();
+        if (part.alpha <= 0) {
+          particles.splice(index, 1);
+        }
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    function endGame() {
+      gameActive = false;
+      finalScore.innerText = score;
+      gameOverScreen.classList.remove('hidden');
+    }
+
+    function restartGame() {
+      hp = 100;
+      score = 0;
+      hpVal.innerText = hp;
+      scoreVal.innerText = score;
+      pathogens = [];
+      antibodies = [];
+      particles = [];
+      gameActive = true;
+      gameOverScreen.classList.add('hidden');
+      animate();
+    }
+
+    // Jalankan Game
+    animate();
+  </script>
+</body>
+</html>
